@@ -187,18 +187,22 @@ implicitEquations =  (Bmat,lam)->(
 -- negative coefficients respectively.
 -- If the system does not have a solution we return "Not pertinent"
 -- If the system does have a solution we return the the set of solutions.
+-- IT could happen that there are feasible solutions in the system of equations
+-- that we set up but when we evaluate at a positive number the image is negative, therefore we
+-- need to incorporate the positivitycheck
 pertinentTerm=(Da,termDa)->(
     currentMonomial := termDa;
     exponentsDa := exponents Da;
     exponentlist := delete(for i from 1 to  (numgens DualCoord) list 0,apply (exponentsDa, i-> i- flatten exponents currentMonomial));
-    B = transpose matrix exponentlist;
+    B := transpose matrix exponentlist;
     kk = ZZ/2;
     Bmod2 := sub(B, kk);
     Bmod2t  := transpose Bmod2;
     newExponents:=delete(flatten exponents(currentMonomial),exponentsDa);
     cLambda := apply(newExponents,i-> (coefficients(Da,Monomials=>{toMonomial(i)}))#1_(0,0));
     cSign:=transpose matrix{for i from 0 to #cLambda-1 list( if  (-sub(cLambda#i,ZZ))>=0  then continue 0;1)}**kk;
-    if rank(Bmod2t)== rank(Bmod2t|cSign) then return   currentMonomial--((gens ker Bmod2t),solve(Bmod2t,cSign))
+    cLambda = apply(cLambda,i->-i);
+    if rank(Bmod2t)== rank(Bmod2t|cSign) then return   (B,cLambda,currentMonomial)--((gens ker Bmod2t),solve(Bmod2t,cSign))
     else return "Not pertinent"
    )
 --------------------------------------------------
@@ -210,6 +214,10 @@ pertinentTerm=(Da,termDa)->(
 --------------------------------------------------
 --*       pertinentDiscriminant     *-------------
 --------------------------------------------------
+--- INPUT: a discriminant Da in the ring DualCoord
+--- OUTPUT: a list where each entry in the list 
+--- to the result of testing whether a given term
+--- in Da is pertinent.
 pertinentDiscriminant=(Da)->(
     termsDa:= terms Da;
     return for i from 0 to #termsDa-1 list pertinentTerm(Da,termsDa_i)
@@ -323,6 +331,25 @@ toAdiscrMonomial=(r,vec)->(
     return fold(factors,(i,j)->i*j)
     )
 -----------------------------------------------------
+--- This basic function takes a two vectors of integers 
+--- and outputs a list of element i in vec to the power of element
+--- i in the list exponentsVec
+exponentiateVector = (vec,exponentsVec)->(
+    factors:=apply(#vec,i->(sub(vec#i,RR))^(exponentsVec#i));
+    return factors
+    )
+--- This function checks wether a given pair (H,lambda)
+--- satisfies the positivity conditions for the image of a point 
+--- to be positive.
+positivityCheck = (H,lambda)->(
+    rowSumH  := apply(entries H, i->sum i);
+    exponentVectors :=entries transpose H;
+    listCoordinates :=apply(#exponentVectors-1,i->sub(lambda#i,RR)*product(exponentiateVector(rowSumH,exponentVectors#i)));
+    return all(listCoordinates,j->(j>0));
+    )
+    --return  all(apply(#exponentVectors,i->sub(-lambda#i,RR)*product(exponentiateVector(rowSumH,exponentVectors#i))),i->(i>0));
+    
+-----------------------------------------------------
 
 
 end--
@@ -336,11 +363,22 @@ restart
 -- the aDiscriminants.m2 files
 -- List of functions = {hUniform,toFraction,psiCoord,checkFriendly,checkPair,implicitEquations,pertinentTerm,
 -- ,pertinentDiscriminant,toMonomial,hornTermDa,toHmonomials,pertinentB}
-load "~/Documents/StagedTrees/m2Computations/DiscreteStatisticalModelsRationalMLE.m2"
+load "~/Documents/gitHubRepos/DiscreteStatisticalModelsWithRationalMLE/DiscreteStatisticalModelsRationalMLE.m2"
 -- start using the functions to  try out examples using your favorite B matrices
+-- EXAMPLE 1 -- Basic usage
 
-A=matrix{{0,1,2,3}}
-aDiscriminantA A
+A         =  matrix{{0,1,2,3}}
+DualCoord = QQ[x_1,x_2,x_3,x_4]
+Da        =  sub(aDiscriminantA A, DualCoord)
+pertinentDiscriminant(sub(Da,DualCoord))
+hornTermDa(sub(Da,DualCoord),sub(term,DualCoord))
+term=-27*x_1^2*x_4^2
+pertinentTerm(sub(Da,DualCoord),sub(term,DualCoord))
+pertinentTerm(sub(x_1+x_2+x_3+x_4,DualCoord), sub(x_3,DualCoord))
+
+DualCoord = QQ[x_1,x_2,x_3,x_4]
+Dacubic= x_2^2*x_3^2-4*x_1*x_3^3-4*x_2^3*x_4+18*x_1*x_2*x_3*x_4-27*x_1^2*x_4^2
+pertinentDiscriminant(Dacubic)
 
 -- Example 26. For distinct positive integers alpha,beta,gamma with gcd(alpha,beta,gamma)=1, let
 -- A = (0,alpha,beta,gamma).
@@ -369,5 +407,49 @@ Amatrices = for i from 0 to #L-1 list( if(gcd(L#i)!=1) then continue; L#i)
 --- 
 --- In the next step we compute the discriminant of all the entries in Amatrices.
 --- This is long. The user can skip this step and use the saved list trinomialDiscriminants
-trinomialDiscrims = time apply(Amatrices,i->aDiscriminantA(matrix{i}));
+--- It is important to specify what is the ring DualCoord in which the polynomials
+--- in the list trinomialDiscrims live. This is important to
+--- call the function pertinentDiscriminant.
+DualCoord=QQ[x_1..x_4]
+trinomialDiscrims = time apply(Amatrices,i->sub(aDiscriminantA(matrix{i}),DualCoord));
+#trinomialDiscrims
+-- Need to make sure I load the correct DualCoord ring so that the code works.
+testTrinomialDiscrims= for j from 0 to #trinomialDiscrims-1 list (pertinentDiscriminant(sub(trinomialDiscrims#j,DualCoord)));
+rawResults = flatten testTrinomialDiscrims
+viewHelp "delete"
+noPertinent = apply(delete("Not pertinent",rawResults),i-> first i)
+delete(false,noPertinent)
 
+first (1,2)
+
+aRawResults=for i from 0 to #rawResults-1 list (if (rawResults#i=="Not pertinent") then continue; i)
+
+flatten o133
+#o136
+pertinentDiscriminant(sub(trinomialDiscrims#3,DualCoord))
+
+B=matrix{{1,0,0},{0,1,0},{0,0,1},{-1,-1,-1}}
+pertinentB(B,matrix{{1,1,1}})
+B=matrix{{2,1,0},{0,1,1},{-2,-2,-1}}; lam={1,1,-1}
+pertinentB(B,matrix{lam})
+DualCoord=QQ[x_1..x_3]
+Da= x_3^2-x_1^2-x_1*x_2+x_2*x_3
+term=x_3^2
+pertinentTerm(Da,term)
+positivityCheck(o36#0,o36#1)
+break
+hornTermDa(sub(Da,DualCoord),sub(termsDa#0,DualCoord))
+positivityCheck(B,{-1,-1,-1})
+exponentiateVector({1,2},{1,3})
+positivityCheck(o28#0,o28#1)
+positivityCheck(o72#0,flatten entries o72#1)
+vec=o28#1
+exponentsVec={1,2,3,4,5,6}
+apply(#vec,i->(sub(vec#i,RR))^(exponentsVec#i))
+
+break
+-- TO DO: Reproduce the results,
+-- is the function pertinentDiscriminant really taking care of the positivity conditions?
+-- Maybe we need to check again.
+-- Make sure we deal correctly with the rings.
+-- DualCoords is hardwired so it is important to work in the correct ring.
