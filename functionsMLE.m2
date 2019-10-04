@@ -239,7 +239,7 @@ pertinentDiscriminant=(Da)->(
 --*       pertinentB               *--------------
 --------------------------------------------------
 -- This function takes a matrix B, figures out if it is
--- friendly or nor and then decides if the pair is
+-- friendly or not and then decides if the pair is
 -- pertinent or not based on finding solutions to
 -- the system of equations
 --------------------------------------------------
@@ -361,3 +361,6 @@ positivityCheck = (H,lambda)->(
 
 
 end--
+
+restart
+load "~/Documents/gitHubRepos/DiscreteStatisticalModelsWithRationalMLE/functionsMLE.m2"
